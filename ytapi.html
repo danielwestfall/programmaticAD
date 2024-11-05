@@ -1,94 +1,135 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube API Example</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Text to Extended Audio Description</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-
-        #video-container {
-            margin-top: 20px;
-        }
+      #player-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 60vh;
+      }
+      #captionDisplay,
+      h1 {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #000000;
+        text-align: center;
+        margin-top: 20px;
+      }
     </style>
-</head>
+  </head>
 
-<body>
-    <h1>YouTube Player API Example</h1>
-    <input type="text" id="video-id-input" placeholder="Enter YouTube Video ID">
-    <button id="load-video-button">Load Video</button>
-    <div id="video-container"></div>
-    <button id="play-button" style="display:none;">Play</button>
-    <button id="pause-button" style="display:none;">Pause</button>
-    <button id="stop-button" style="display:none;">Stop</button>
-
-    <h1>Text To Speech</h1>
-    <button onclick="speak()">Speak</button>
+  <body>
+    <h1>Text to Extended Audio Description</h1>
+    <div id="player-container">
+      <div id="player"></div>
+    </div>
+    <p id="captionDisplay"></p>
 
     <script>
-        let player;
+      const videoData = {
+        videoId: "dkgjMo1Ogpg",
+        timestamps: [
+          {
+            time: 8.585922,
+            description:
+              "Quaver and Gwenda sit at an announcer's desk with a tv screen between them.",
+          },
+          {
+            time: 36.521875,
+            description:
+              "The bracket that students filled out is shown on the tv screen.",
+          },
+          // More timestamps...
+        ],
+      };
 
-        document.getElementById('load-video-button').addEventListener('click', function () {
-            const videoId = document.getElementById('video-id-input').value;
-            loadVideo(videoId);
+      // Load YouTube IFrame API
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+      let player;
+      let currentTimestampIndex = 0;
+      let isPlaying = false;
+      let defaultVoice;
+
+      function onYouTubeIframeAPIReady() {
+        player = new YT.Player("player", {
+          height: "390",
+          width: "640",
+          videoId: videoData.videoId,
+          events: {
+            onReady: onPlayerReady,
+            onStateChange: onPlayerStateChange,
+          },
         });
+      }
 
-        function loadVideo(videoId) {
-            if (player) {
-                player.loadVideoById(videoId);
-            } else {
-                // Create the YouTube player
-                player = new YT.Player('video-container', {
-                    height: '315',
-                    width: '560',
-                    videoId: videoId,
-                    playerVars: {
-                        'rel': 0
-                    },
-                    events: {
-                        'onReady': onPlayerReady
-                    }
-                });
+      function onPlayerReady(event) {
+        currentTimestampIndex = 0;
+        event.target.playVideo();
+        isPlaying = true;
+      }
+
+      function onPlayerStateChange(event) {
+        if (event.data === YT.PlayerState.PLAYING && isPlaying) {
+          checkTimestamp();
+        }
+      }
+
+      function checkTimestamp() {
+        if (currentTimestampIndex < videoData.timestamps.length) {
+          const timestamp = videoData.timestamps[currentTimestampIndex].time;
+
+          const checkTimeInterval = setInterval(() => {
+            const currentTime = player.getCurrentTime();
+            if (currentTime >= timestamp) {
+              clearInterval(checkTimeInterval);
+              player.pauseVideo();
+              isPlaying = false;
+              displayAndSpeakText(
+                videoData.timestamps[currentTimestampIndex].description
+              );
             }
+          }, 500);
+        }
+      }
+
+      window.speechSynthesis.onvoiceschanged = () => {
+        const voices = window.speechSynthesis.getVoices();
+        console.log(voices); // Log available voices
+
+        // Set your desired default voice
+        defaultVoice = voices.find(
+          (voice) => voice.name === "Google UK English Female"
+        );
+        if (!defaultVoice) {
+          console.error("Default voice not found. Available voices:", voices);
+        }
+      };
+
+      function displayAndSpeakText(text) {
+        document.getElementById("captionDisplay").textContent = text;
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (defaultVoice) {
+          utterance.voice = defaultVoice;
         }
 
-        function onPlayerReady(event) {
-            document.getElementById('play-button').style.display = 'inline';
-            document.getElementById('pause-button').style.display = 'inline';
-            document.getElementById('stop-button').style.display = 'inline';
+        utterance.onend = () => {
+          currentTimestampIndex++;
+          isPlaying = true;
+          player.playVideo();
+        };
 
-            // Add event listeners for control buttons
-            document.getElementById('play-button').addEventListener('click', function () {
-                player.playVideo();
-            });
-
-            document.getElementById('pause-button').addEventListener('click', function () {
-                player.pauseVideo();
-            });
-
-            document.getElementById('stop-button').addEventListener('click', function () {
-                player.stopVideo();
-            });
-        }
+        // Start speaking the text
+        window.speechSynthesis.speak(utterance);
+      }
     </script>
-
-    <script src="https://www.youtube.com/iframe_api"></script>
-    <script>
-        function speak() {
-            // Create a SpeechSynthesisUtterance
-            const utterance = new SpeechSynthesisUtterance("Welcome to this tutorial!");
-
-            // Select a voice
-            const voices = speechSynthesis.getVoices();
-            utterance.voice = voices[0]; // Choose a specific voice
-
-            // Speak the text
-            speechSynthesis.speak(utterance);
-        }
-    </script>
-</body>
-
+  </body>
 </html>
